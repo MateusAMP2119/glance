@@ -1,0 +1,19 @@
+- name: Lab
+  columns:
+    - size: small
+      widgets:
+      - type: docker-containers
+      - type: server-stats
+
+    - size: full
+      widgets:
+      - type: custom-api
+        title: DNS Records
+        url: https://adguard.bymarreco.com/control/stats
+        headers:
+          Authorization: Basic ${ADGUARD_AUTH}
+        template: |
+          <h3>DNS Records</h3>
+          <ul>
+            <li>Total Requests: 13</li>
+          </ul>
