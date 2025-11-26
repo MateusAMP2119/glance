@@ -22,26 +22,26 @@
               {{ $blockedPct := 0 }}{{ if gt $total 0 }}{{ $blockedPct = mul (div (toFloat $blocked) (toFloat $total)) 100 }}{{ end }}
               {{ $allowedPct := 0 }}{{ if gt $total 0 }}{{ $allowedPct = sub 100 $blockedPct }}{{ end }}
               <style>
-                .dns-donut-wrapper { margin-top: 12px; display:flex; justify-content:center; }
+                .donut-row { margin-top: 12px; display:flex; align-items:center; gap:16px; }
                 .dns-donut { position: relative; width: 160px; aspect-ratio: 1 / 1; border-radius: 50%; display: grid; place-items: center; }
                 .dns-donut-inner { width: 90px; aspect-ratio: 1 / 1; border-radius: 50%; background: var(--color-background); display: flex; flex-direction: column; align-items: center; justify-content: center; }
-                .dns-breakdown-legend { margin-top:16px; display:flex; flex-direction:column; gap:6px; }
+                .dns-breakdown-legend { display:flex; flex-direction:column; gap:8px; }
                 .legend-row { display:flex; align-items:center; gap:8px; }
                 .swatch { width:14px; height:14px; border-radius:3px; }
               </style>
               <div class="card padding-16">
-                <div class="dns-donut-wrapper">
+                <div class="donut-row">
                   <div class="dns-donut" style="background: conic-gradient(var(--color-positive) {{ printf "%.4f" $allowedPct }}%, var(--color-negative) 0);">
                     <div class="dns-donut-inner">
                       <div class="size-h6 color-subdue">Total</div>
                       <div class="size-h3 color-highlight">{{ formatNumber $total }}</div>
                     </div>
                   </div>
-                </div>
-                <div class="dns-breakdown-legend size-h6">
-                  <div class="legend-row"><span class="swatch" style="background:var(--color-positive);"></span><span>Allowed: <strong class="color-positive">{{ formatNumber $allowed }}</strong> ({{ printf "%.1f" $allowedPct }}%)</span></div>
-                  <div class="legend-row"><span class="swatch" style="background:var(--color-negative);"></span><span>Blocked: <strong class="color-negative">{{ formatNumber $blocked }}</strong> ({{ printf "%.1f" $blockedPct }}%)</span></div>
-                  <div class="legend-row"><span class="swatch" style="background:var(--color-background-secondary);"></span><span>Net Allowed: {{ formatNumber $allowed }} / {{ formatNumber $total }}</span></div>
+                  <div class="dns-breakdown-legend size-h6">
+                    <div class="legend-row"><span class="swatch" style="background:var(--color-positive);"></span><span>Allowed: <strong class="color-positive">{{ formatNumber $allowed }}</strong> ({{ printf "%.1f" $allowedPct }}%)</span></div>
+                    <div class="legend-row"><span class="swatch" style="background:var(--color-negative);"></span><span>Blocked: <strong class="color-negative">{{ formatNumber $blocked }}</strong> ({{ printf "%.1f" $blockedPct }}%)</span></div>
+                    <div class="legend-row"><span class="swatch" style="background:var(--color-background-secondary);"></span><span>Net Allowed: {{ formatNumber $allowed }} / {{ formatNumber $total }}</span></div>
+                  </div>
                 </div>
               </div>
           - type: custom-api
