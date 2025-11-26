@@ -10,5 +10,5 @@ branding:
   logo-url: /assets/marreco.png
 
 pages:
+  - $include: homelab.yml
   - $include: welcome.yml
-  - $include: lab.yml
