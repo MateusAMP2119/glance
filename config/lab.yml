@@ -8,76 +8,89 @@
     - size: full
       widgets:
       # Summary widget
-      - type: custom-api
-        title: DNS Summary
-        url: https://adguard.bymarreco.com/control/stats
-        headers:
-          Authorization: Basic ${ADGUARD_AUTH}
-        template: |
-          {{/* Core metrics */}}
-          {{ $total := .JSON.Int "num_dns_queries" }}
-          {{ $blocked := .JSON.Int "num_blocked_filtering" }}
-          {{ $allowedFloat := sub (toFloat $total) (toFloat $blocked) }}
-          {{ $allowed := toInt $allowedFloat }}
-          {{ $blockedPct := mul (div (toFloat $blocked) (toFloat $total)) 100 }}
-          {{ $allowedPct := mul (div (toFloat $allowed) (toFloat $total)) 100 }}
-          {{ $avgProcMs := mul (.JSON.Float "avg_processing_time") 1000 }}
-          {{ $blockRatio := div (toFloat $total) (toFloat $blocked) }}
-          {{ $upResp := .JSON.Int "top_upstreams_responses.0.1.1.1:53" }}
-          {{ $upTimeMs := mul (toFloat (.JSON.Int "top_upstreams_avg_time.0.1.1.1:53")) 1000 }}
-          {{/* Top domain samples */}}
-          {{ $d0 := .JSON.Int "top_queried_domains.0.a.root-servers.net" }}
-          {{ $d1 := .JSON.Int "top_queried_domains.1.time.nist.gov" }}
-          {{ $d2 := .JSON.Int "top_queried_domains.2.proxy-pacfile-allianz.intra.net" }}
-          {{ $d3 := .JSON.Int "top_queried_domains.3.nz.pool.ntp.org" }}
-          {{ $d4 := .JSON.Int "top_queried_domains.4.au.pool.ntp.org" }}
-          {{ $d5 := .JSON.Int "top_queried_domains.5.time-nw.nist.gov" }}
-          {{ $d6 := .JSON.Int "top_queried_domains.6.time-a.nist.gov" }}
-          {{ $d7 := .JSON.Int "top_queried_domains.7.time-b.nist.gov" }}
-          {{/* Blocked domain samples */}}
-          {{ $b0 := .JSON.Int "top_blocked_domains.0.eu-mobile.events.data.microsoft.com" }}
-          {{ $b1 := .JSON.Int "top_blocked_domains.1.self.events.data.microsoft.com" }}
-          {{ $b2 := .JSON.Int "top_blocked_domains.2.eu-teams.events.data.microsoft.com" }}
-          {{ $b3 := .JSON.Int "top_blocked_domains.3.teams.events.data.microsoft.com" }}
-          {{ $b4 := .JSON.Int "top_blocked_domains.4.proxy-pacfile-allianz.intra.net" }}
-          {{ $b5 := .JSON.Int "top_blocked_domains.5.graph.facebook.com" }}
-          {{ $b6 := .JSON.Int "top_blocked_domains.6.graph.instagram.com" }}
-          {{ $b7 := .JSON.Int "top_blocked_domains.7.zscaler-loc-beacon.allianz.net" }}
-          {{/* Top client samples */}}
-          {{ $c0 := .JSON.Int "top_clients.0.192.168.0.0" }}
-          {{ $c1 := .JSON.Int "top_clients.1.192.168.1.86" }}
-          {{ $c2 := .JSON.Int "top_clients.2.89.115.0.0" }}
-          {{ $c3 := .JSON.Int "top_clients.3.89.115.127.174" }}
-          {{ $c4 := .JSON.Int "top_clients.4.192.168.1.65" }}
-
-          <div class="size-h4 margin-bottom-7">DNS Statistics <span class="color-subdue size-h5">({{ .JSON.String "time_units" }})</span></div>
-
-          {{/* Summary Bar (Allowed vs Blocked) */}}
-          <div class="progress-bar margin-bottom-10" title="Allowed vs Blocked">
-            <div class="progress-value" style="--percent: {{ printf "%.2f" $allowedPct }}"></div>
-            <div class="progress-value progress-value-notice" style="--percent: {{ printf "%.2f" $blockedPct }}"></div>
-          </div>
-
-          <ul class="list list-gap-10 list-with-separator dns-stats-totals margin-bottom-15">
-            <li class="flex justify-between"><span>Total</span><span class="color-highlight">{{ formatNumber $total }}</span></li>
-            <li class="flex justify-between"><span>Allowed</span><span class="color-positive">{{ formatNumber $allowed }} ({{ printf "%.1f" $allowedPct }}%)</span></li>
-            <li class="flex justify-between"><span>Blocked</span><span class="color-negative">{{ formatNumber $blocked }} ({{ printf "%.1f" $blockedPct }}%)</span></li>
-            <li class="flex justify-between"><span>Block Ratio</span><span class="color-paragraph">1 in {{ printf "%.1f" $blockRatio }}</span></li>
-            <li class="flex justify-between"><span>Avg Proc Time</span><span>{{ printf "%.2f" $avgProcMs }} ms</span></li>
-            <li class="flex justify-between"><span>Upstream (1.1.1.1)</span><span>{{ formatNumber $upResp }} req • {{ printf "%.2f" $upTimeMs }} ms avg</span></li>
-          </ul>
-
-      # Side-by-side: Top Queried + Top Blocked
       - type: split-column
         widgets:
           - type: custom-api
-            title: DNS Top Queried
+            title: DNS Query Breakdown
             url: https://adguard.bymarreco.com/control/stats
             headers:
               Authorization: Basic ${ADGUARD_AUTH}
             template: |
               {{ $total := .JSON.Int "num_dns_queries" }}
-              <ol class="list list-gap-4 list-with-separator">
+              {{ $blocked := .JSON.Int "num_blocked_filtering" }}
+              {{ $allowed := sub $total $blocked }}
+              {{ $blockedPct := 0 }}{{ if gt $total 0 }}{{ $blockedPct = mul (div (toFloat $blocked) (toFloat $total)) 100 }}{{ end }}
+              {{ $allowedPct := 0 }}{{ if gt $total 0 }}{{ $allowedPct = sub 100 $blockedPct }}{{ end }}
+              <style>
+                .dns-donut-wrapper { margin-top: 12px; display:flex; justify-content:center; }
+                .dns-donut { position: relative; width: 160px; aspect-ratio: 1 / 1; border-radius: 50%; display: grid; place-items: center; }
+                .dns-donut-inner { width: 90px; aspect-ratio: 1 / 1; border-radius: 50%; background: var(--color-background); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+                .dns-breakdown-legend { margin-top:16px; display:flex; flex-direction:column; gap:6px; }
+                .legend-row { display:flex; align-items:center; gap:8px; }
+                .swatch { width:14px; height:14px; border-radius:3px; }
+              </style>
+              <div class="card padding-16">
+                <div class="dns-donut-wrapper">
+                  <div class="dns-donut" style="background: conic-gradient(var(--color-positive) {{ printf "%.4f" $allowedPct }}%, var(--color-negative) 0);">
+                    <div class="dns-donut-inner">
+                      <div class="size-h6 color-subdue">Total</div>
+                      <div class="size-h3 color-highlight">{{ formatNumber $total }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="dns-breakdown-legend size-h6">
+                  <div class="legend-row"><span class="swatch" style="background:var(--color-positive);"></span><span>Allowed: <strong class="color-positive">{{ formatNumber $allowed }}</strong> ({{ printf "%.1f" $allowedPct }}%)</span></div>
+                  <div class="legend-row"><span class="swatch" style="background:var(--color-negative);"></span><span>Blocked: <strong class="color-negative">{{ formatNumber $blocked }}</strong> ({{ printf "%.1f" $blockedPct }}%)</span></div>
+                  <div class="legend-row"><span class="swatch" style="background:var(--color-background-secondary);"></span><span>Net Allowed: {{ formatNumber $allowed }} / {{ formatNumber $total }}</span></div>
+                </div>
+              </div>
+          - type: custom-api
+            title: Performance & Insights
+            url: https://adguard.bymarreco.com/control/stats
+            headers:
+              Authorization: Basic ${ADGUARD_AUTH}
+            template: |
+              {{ $total := .JSON.Int "num_dns_queries" }}
+              {{ $blocked := .JSON.Int "num_blocked_filtering" }}
+              {{ $allowed := sub $total $blocked }}
+              {{ $blockedPct := 0 }}{{ if gt $total 0 }}{{ $blockedPct = mul (div (toFloat $blocked) (toFloat $total)) 100 }}{{ end }}
+              {{ $allowedPct := 0 }}{{ if gt $total 0 }}{{ $allowedPct = sub 100 $blockedPct }}{{ end }}
+              {{ $avgProcMs := mul (.JSON.Float "avg_processing_time") 1000 }}
+              <style>
+                .perf-metrics { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+                .metric { display:flex; flex-direction:column; gap:4px; }
+                .pill { border-radius:6px; background:var(--color-background-secondary); padding:4px 10px; }
+                .insights { list-style:none; margin:16px 0 0; padding:0; }
+                .insights li { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--color-background-secondary); }
+                .insights li:last-child { border-bottom:none; }
+              </style>
+              <div class="card padding-16">
+                <div class="size-h4">Performance & Filtering</div>
+                <div class="perf-metrics">
+                  <div class="metric">
+                    <div class="size-h6 color-subdue">Avg Processing</div>
+                    <div class="size-h2">{{ printf "%.1f" $avgProcMs }} <span class="size-h5 color-subdue">ms</span></div>
+                  </div>
+                </div>
+                <div class="size-h6 margin-top-10"><strong>Filtering Level:</strong> <span class="pill">{{ if ge $blockedPct (toFloat 50) }}Aggressive{{ else if ge $blockedPct (toFloat 30) }}Moderate{{ else if ge $blockedPct (toFloat 15) }}Light{{ else }}Minimal{{ end }}</span></div>
+                <ul class="insights size-h6">
+                  {{ range $i, $ := .JSON.Array "top_upstreams_responses" }}{{ if eq $i 0 }}{{ $upResp := (.Get "@values.0").Int "" }}<li><span>Cache Hit Rate</span><span>{{ if gt $total 0 }}{{ printf "%.1f" (mul (div (sub $total $upResp) (toFloat $total)) 100) }}%{{ else }}N/A{{ end }}</span></li>{{ end }}{{ end }}
+                  {{ range $i, $ := .JSON.Array "top_upstreams_avg_time" }}{{ if eq $i 0 }}<li><span>Upstream Avg Time</span><span>{{ printf "%.1f" (mul ((.Get "@values.0").Float "") 1000) }} ms</span></li>{{ end }}{{ end }}
+                  {{ range $i, $ := .JSON.Array "top_clients" }}{{ if eq $i 0 }}<li><span>Top Client Share</span><span>{{ printf "%.1f" (mul (div (toFloat ((.Get "@values.0").Int "")) (toFloat $total)) 100) }}% ({{ (.Get "@keys.0").String "" }})</span></li>{{ end }}{{ end }}
+                  {{ range .JSON.Array "top_queried_domains" }}{{ $k := (.Get "@keys.0").String "" }}{{ if eq $k "a.root-servers.net" }}<li><span>Root Server Share</span><span>{{ printf "%.1f" (mul (div (toFloat ((.Get "@values.0").Int "")) (toFloat $total)) 100) }}% ({{ formatNumber ((.Get "@values.0").Int "") }})</span></li>{{ end }}{{ end }}
+                  <li><span>Allowed vs Blocked</span><span>{{ printf "%.1f" $allowedPct }}% / {{ printf "%.1f" $blockedPct }}%</span></li>
+                </ul>
+              </div>
+      - type: split-column
+        widgets:
+          - type: custom-api
+            title: Top Queried
+            url: https://adguard.bymarreco.com/control/stats
+            headers:
+              Authorization: Basic ${ADGUARD_AUTH}
+            template: |
+              {{ $total := .JSON.Int "num_dns_queries" }}
+              <ol class="list list-gap-20 list-with-separator">
                 {{ range $i, $ := .JSON.Array "top_queried_domains" }}
                   {{ if lt $i 12 }}
                     {{ $kRes := .Get "@keys.0" }}
@@ -89,13 +102,13 @@
                 {{ end }}
               </ol>
           - type: custom-api
-            title: DNS Top Blocked
+            title: Top Blocked
             url: https://adguard.bymarreco.com/control/stats
             headers:
               Authorization: Basic ${ADGUARD_AUTH}
             template: |
               {{ $total := .JSON.Int "num_dns_queries" }}
-              <ol class="list list-gap-4 list-with-separator">
+              <ol class="list list-gap-20 list-with-separator">
                 {{ range $i, $ := .JSON.Array "top_blocked_domains" }}
                   {{ if lt $i 12 }}
                     {{ $kRes := .Get "@keys.0" }}
@@ -107,69 +120,22 @@
                 {{ end }}
               </ol>
 
-      # Side-by-side: Top Clients + Insights
-      - type: split-column
-        widgets:
-          - type: custom-api
-            title: DNS Top Clients
-            url: https://adguard.bymarreco.com/control/stats
-            headers:
-              Authorization: Basic ${ADGUARD_AUTH}
-            template: |
-              {{ $total := .JSON.Int "num_dns_queries" }}
-              <ol class="list list-gap-4 list-with-separator">
-                {{ range $i, $ := .JSON.Array "top_clients" }}
-                  {{ if lt $i 12 }}
-                    {{ $kRes := .Get "@keys.0" }}
-                    {{ $vRes := .Get "@values.0" }}
-                    {{ $k := $kRes.String "" }}
-                    {{ $v := $vRes.Int "" }}
-                    <li class="flex justify-between"><span>{{ $k }}</span><span class="color-highlight">{{ formatNumber $v }} <span class="color-subdue size-h6">({{ printf "%.2f" (mul (div (toFloat $v) (toFloat $total)) 100) }}%)</span></span></li>
-                  {{ end }}
-                {{ end }}
-              </ol>
-          - type: custom-api
-            title: DNS Insights
-            url: https://adguard.bymarreco.com/control/stats
-            headers:
-              Authorization: Basic ${ADGUARD_AUTH}
-            template: |
-              {{ $total := .JSON.Int "num_dns_queries" }}
-              {{ $blocked := .JSON.Int "num_blocked_filtering" }}
-              {{ $avgProcMs := mul (.JSON.Float "avg_processing_time") 1000 }}
-              {{ $blockRatio := div (toFloat $total) (toFloat $blocked) }}
-              {{ $d0 := .JSON.Int "top_queried_domains.0.a.root-servers.net" }}
-              {{ $c0 := .JSON.Int "top_clients.0.192.168.0.0" }}
-              <details class="details">
-                <summary class="summary size-h5">Insights</summary>
-                <ul class="list list-gap-8 list-with-separator">
-                  <li class="flex justify-between"><span>Blocked Percentage</span><span>{{ printf "%.1f" (mul (div (toFloat $blocked) (toFloat $total)) 100) }}%</span></li>
-                  <li class="flex justify-between"><span>Queries / Blocked</span><span>{{ printf "%.1f" $blockRatio }} : 1</span></li>
-                  <li class="flex justify-between"><span>Processing Efficiency</span><span>{{ printf "%.1f" (div 1000 $avgProcMs) }} q/ms (approx)</span></li>
-                  <li class="flex justify-between"><span>Most Queried Share</span><span>{{ printf "%.2f" (mul (div (toFloat $d0) (toFloat $total)) 100) }}%</span></li>
-                  <li class="flex justify-between"><span>Top Client Share</span><span>{{ printf "%.2f" (mul (div (toFloat $c0) (toFloat $total)) 100) }}%</span></li>
-                </ul>
-              </details>
-
-      # Compact sparkline widget (queries vs blocked)
+      # Top Clients
       - type: custom-api
-        title: DNS Activity
+        title: Top Clients
         url: https://adguard.bymarreco.com/control/stats
         headers:
           Authorization: Basic ${ADGUARD_AUTH}
         template: |
-          {{ $qs := .JSON.Array "dns_queries" }}
-          {{ $bs := .JSON.Array "blocked_filtering" }}
-          {{ $count := len $qs }}
-          {{ $max := 0 }}
-          {{ range $qs }}{{ $v := .Int "" }}{{ if gt $v $max }}{{ $max = $v }}{{ end }}{{ end }}
-          <svg width="100%" height="40" viewBox="0 0 {{ $count }} 40" preserveAspectRatio="none">
-            {{ range $i, $ := $qs }}
-              {{ $q := .Int "" }}
-              {{ $b := (index $bs $i).Int "" }}
-              {{ $hQ := mul (div (toFloat $q) (toFloat $max)) 40 }}
-              {{ $hB := mul (div (toFloat $b) (toFloat $max)) 40 }}
-              <rect x="{{ $i }}" y="{{ sub 40 $hQ }}" width="1" height="{{ $hQ }}" fill="var(--color-vertical-progress-value)" />
-              <rect x="{{ $i }}" y="{{ sub 40 $hB }}" width="1" height="{{ $hB }}" fill="var(--color-negative)" />
+          {{ $total := .JSON.Int "num_dns_queries" }}
+          <ol class="list list-gap-20 list-with-separator">
+            {{ range $i, $ := .JSON.Array "top_clients" }}
+              {{ if lt $i 12 }}
+                {{ $kRes := .Get "@keys.0" }}
+                {{ $vRes := .Get "@values.0" }}
+                {{ $k := $kRes.String "" }}
+                {{ $v := $vRes.Int "" }}
+                <li class="flex justify-between"><span>{{ $k }}</span><span class="color-highlight">{{ formatNumber $v }} <span class="color-subdue size-h6">({{ printf "%.2f" (mul (div (toFloat $v) (toFloat $total)) 100) }}%)</span></span></li>
+              {{ end }}
             {{ end }}
-          </svg>
+          </ol>
